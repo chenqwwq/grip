@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project Grip.xcodeproj \
+            -scheme Grip \
+            -archivePath build/Grip.xcarchive \
+            -destination 'platform=macOS' \
+            CONFIGURATION=Release
+
+      - name: Export App
+        run: |
+          mkdir -p build/export
+          cp -R build/Grip.xcarchive/Products/Applications/Grip.app build/export/Grip.app
+
+      - name: Create ZIP
+        run: |
+          cd build/export
+          zip -r Grip-${{ steps.version.outputs.VERSION }}.zip Grip.app
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Grip ${{ steps.version.outputs.VERSION }}
+          files: build/export/Grip-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true

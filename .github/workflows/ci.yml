@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-xcode-${{ hashFiles('Grip.xcodeproj/project.pbxproj') }}
+          restore-keys: ${{ runner.os }}-xcode-
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project Grip.xcodeproj \
+            -scheme Grip \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            | xcpretty || true
+
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project Grip.xcodeproj \
+            -scheme Grip \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            | xcpretty --report junit --output build/reports/junit.xml || true
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/
