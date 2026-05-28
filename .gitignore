@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Xcode user state
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+DerivedData/
+build/
+*.moved-aside
+*.xccheckout
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# App archives and exports
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Logs and local runtime data
+*.log
+Logs/
+
+# Local tooling
+.superpowers/
+
+# Secrets and local environment
+.env
+.env.*
+*.pem
+*.p8
+*.p12
+
