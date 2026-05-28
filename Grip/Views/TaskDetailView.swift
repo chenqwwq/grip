@@ -11,8 +11,17 @@ struct TaskDetailView: View {
     @State private var priority: TaskPriority = .none
     @State private var dueDate: Date? = nil
 
-    init(task: GripTask) {
+    let onSave: ((GripTask, String, String?, String?, TaskPriority, Date?) throws -> Void)?
+    let onDelete: ((GripTask) throws -> Void)?
+
+    init(
+        task: GripTask,
+        onSave: ((GripTask, String, String?, String?, TaskPriority, Date?) throws -> Void)? = nil,
+        onDelete: ((GripTask) throws -> Void)? = nil
+    ) {
         self.task = task
+        self.onSave = onSave
+        self.onDelete = onDelete
         self._title = State(initialValue: task.title)
         self._detail = State(initialValue: task.detail ?? "")
         self._category = State(initialValue: task.category ?? "")
@@ -144,16 +153,31 @@ struct TaskDetailView: View {
             Spacer()
             Button("取消") { dismiss() }
             Button("删除", role: .destructive) {
-                try? taskManager.deleteTask(task)
+                if let onDelete {
+                    try? onDelete(task)
+                } else {
+                    try? taskManager.deleteTask(task)
+                }
                 dismiss()
             }
             Button("保存") {
-                task.title = title
-                task.detail = detail.isEmpty ? nil : detail
-                task.category = category.isEmpty ? nil : category
-                task.priority = priority
-                task.dueDate = dueDate
-                try? taskManager.updateTask(task)
+                if let onSave {
+                    try? onSave(
+                        task,
+                        title,
+                        detail.isEmpty ? nil : detail,
+                        category.isEmpty ? nil : category,
+                        priority,
+                        dueDate
+                    )
+                } else {
+                    task.title = title
+                    task.detail = detail.isEmpty ? nil : detail
+                    task.category = category.isEmpty ? nil : category
+                    task.priority = priority
+                    task.dueDate = dueDate
+                    try? taskManager.updateTask(task)
+                }
                 dismiss()
             }
             .buttonStyle(.borderedProminent)

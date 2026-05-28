@@ -25,7 +25,7 @@ final class LLMService {
             throw LLMError.apiKeyNotConfigured
         }
         GripLogger.shared.info("开始文本识别，模型: \(adapter.model)，文本长度: \(text.count)")
-        return try await callLLM(adapter: adapter, apiKey: apiKey, messages: [
+        return try await callLLM(requestKind: "text", adapter: adapter, apiKey: apiKey, messages: [
             ["role": "user", "content": text]
         ])
     }
@@ -48,19 +48,25 @@ final class LLMService {
                 "text": systemPrompt()
             ]
         ]
-        return try await callLLM(adapter: adapter, apiKey: apiKey, messages: [
+        return try await callLLM(requestKind: "image", adapter: adapter, apiKey: apiKey, messages: [
             ["role": "user", "content": content]
         ])
     }
 
-    private func callLLM(adapter: LLMAdapterConfig, apiKey: String, messages: [[String: Any]]) async throws -> ParsedTask {
+    private func callLLM(
+        requestKind: String,
+        adapter: LLMAdapterConfig,
+        apiKey: String,
+        messages: [[String: Any]]
+    ) async throws -> ParsedTask {
         let endpoint = resolveEndpoint(adapter.apiURL)
         guard let url = URL(string: endpoint) else {
             GripLogger.shared.error("LLM 请求失败: URL 无效 - \(endpoint)")
             throw LLMError.invalidURL
         }
 
-        GripLogger.shared.debug("LLM 请求: \(adapter.apiURL), model: \(adapter.model)")
+        let requestID = UUID().uuidString
+        GripLogger.shared.info("LLM 请求开始[\(requestID)]: type=\(requestKind), endpoint=\(endpoint), model=\(adapter.model)")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -82,18 +88,50 @@ final class LLMService {
             "temperature": 0.3
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        GripLogger.shared.debug("LLM 请求体[\(requestID)]: size=\(request.httpBody?.count ?? 0) bytes, messages=\(allMessages.count)")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            GripLogger.shared.error("LLM 网络请求失败[\(requestID)]: type=\(requestKind), endpoint=\(endpoint), model=\(adapter.model), error=\(error.localizedDescription)")
+            throw error
+        }
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            GripLogger.shared.error("LLM 请求失败: HTTP \(statusCode)")
-            throw LLMError.httpError(statusCode)
+            let headers = responseHeadersSummary(response as? HTTPURLResponse)
+            let responseBody = responseBodySummary(data)
+            GripLogger.shared.error("""
+            LLM 请求失败[\(requestID)]:
+            type=\(requestKind)
+            endpoint=\(endpoint)
+            model=\(adapter.model)
+            status=\(statusCode)
+            headers=\(headers)
+            responseBody=\(responseBody)
+            """)
+            throw LLMError.httpError(statusCode, responseBody)
         }
 
-        GripLogger.shared.debug("LLM 响应成功，大小: \(data.count) bytes")
-        return try parseResponse(data)
+        GripLogger.shared.debug("LLM 响应成功[\(requestID)]，大小: \(data.count) bytes")
+        do {
+            let parsed = try parseResponse(data)
+            GripLogger.shared.info("LLM 解析成功[\(requestID)]: title=\(parsed.title), priority=\(parsed.priority ?? "nil"), dueDate=\(parsed.dueDate ?? "nil")")
+            return parsed
+        } catch {
+            GripLogger.shared.error("""
+            LLM 响应解析失败[\(requestID)]:
+            type=\(requestKind)
+            endpoint=\(endpoint)
+            model=\(adapter.model)
+            responseBody=\(responseBodySummary(data))
+            error=\(error.localizedDescription)
+            """)
+            throw error
+        }
     }
 
     private func resolveEndpoint(_ apiURL: String) -> String {
@@ -133,6 +171,50 @@ final class LLMService {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func responseHeadersSummary(_ response: HTTPURLResponse?) -> String {
+        guard let response else { return "nil" }
+        let interestingKeys = [
+            "retry-after",
+            "x-request-id",
+            "x-ratelimit-limit-requests",
+            "x-ratelimit-remaining-requests",
+            "x-ratelimit-reset-requests",
+            "x-ratelimit-limit-tokens",
+            "x-ratelimit-remaining-tokens",
+            "x-ratelimit-reset-tokens"
+        ]
+
+        var values: [String] = []
+        for key in interestingKeys {
+            if let value = headerValue(response: response, key: key) {
+                values.append("\(key)=\(value)")
+            }
+        }
+
+        if values.isEmpty {
+            values.append("all=\(response.allHeaderFields)")
+        }
+        return values.joined(separator: ", ")
+    }
+
+    private func headerValue(response: HTTPURLResponse, key: String) -> String? {
+        for (headerKey, headerValue) in response.allHeaderFields {
+            guard String(describing: headerKey).lowercased() == key else { continue }
+            return String(describing: headerValue)
+        }
+        return nil
+    }
+
+    private func responseBodySummary(_ data: Data, limit: Int = 4_000) -> String {
+        guard !data.isEmpty else { return "<empty>" }
+        let raw = String(data: data, encoding: .utf8) ?? data.base64EncodedString()
+        let normalized = raw.replacingOccurrences(of: "\n", with: "\\n")
+        if normalized.count <= limit {
+            return normalized
+        }
+        return String(normalized.prefix(limit)) + "...<truncated \(normalized.count - limit) chars>"
     }
 
     private func systemPrompt() -> String {
@@ -201,14 +283,14 @@ extension LLMService {
 enum LLMError: LocalizedError {
     case apiKeyNotConfigured
     case invalidURL
-    case httpError(Int)
+    case httpError(Int, String)
     case emptyResponse
 
     var errorDescription: String? {
         switch self {
         case .apiKeyNotConfigured: "API Key 未配置"
         case .invalidURL: "API URL 格式错误"
-        case .httpError(let code): "HTTP 错误: \(code)"
+        case .httpError(let code, let body): "HTTP 错误: \(code)，响应: \(body)"
         case .emptyResponse: "LLM 返回为空"
         }
     }

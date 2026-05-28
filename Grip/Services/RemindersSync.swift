@@ -3,10 +3,46 @@ import Foundation
 import Observation
 
 @MainActor
+protocol ReminderSyncing: AnyObject {
+    var isAuthorized: Bool { get }
+
+    func refreshAuthorizationStatus()
+    func requestAccess() async -> Bool
+    func syncTask(_ task: GripTask) throws -> String?
+    func fetchCompletionState(for task: GripTask) -> Bool?
+    func removeTask(_ task: GripTask) throws
+    func observeExternalChanges(_ handler: @escaping @MainActor () -> Void)
+}
+
+enum RemindersAuthorization {
+    static func allowsReadWrite(_ status: EKAuthorizationStatus) -> Bool {
+        switch status {
+        case .fullAccess:
+            return true
+        case .authorized:
+            return true
+        case .writeOnly, .notDetermined, .restricted, .denied:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+}
+
+@MainActor
 @Observable
-final class RemindersSync {
+final class RemindersSync: ReminderSyncing {
     private let eventStore = EKEventStore()
+    private var externalChangeObserver: NSObjectProtocol?
     var isAuthorized = false
+
+    deinit {
+        MainActor.assumeIsolated {
+            if let externalChangeObserver {
+                NotificationCenter.default.removeObserver(externalChangeObserver)
+            }
+        }
+    }
 
     func refreshAuthorizationStatus() {
         isAuthorized = Self.currentAuthorizationStatusAllowsAccess
@@ -59,6 +95,22 @@ final class RemindersSync {
         try eventStore.remove(reminder, commit: true)
     }
 
+    func observeExternalChanges(_ handler: @escaping @MainActor () -> Void) {
+        if let externalChangeObserver {
+            NotificationCenter.default.removeObserver(externalChangeObserver)
+        }
+
+        externalChangeObserver = NotificationCenter.default.addObserver(
+            forName: .EKEventStoreChanged,
+            object: eventStore,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                handler()
+            }
+        }
+    }
+
     private func createReminder(from task: GripTask) throws -> String? {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = task.title
@@ -104,15 +156,6 @@ final class RemindersSync {
     }
 
     private static var currentAuthorizationStatusAllowsAccess: Bool {
-        switch EKEventStore.authorizationStatus(for: .reminder) {
-        case .fullAccess, .writeOnly:
-            return true
-        case .authorized:
-            return true
-        case .notDetermined, .restricted, .denied:
-            return false
-        @unknown default:
-            return false
-        }
+        RemindersAuthorization.allowsReadWrite(EKEventStore.authorizationStatus(for: .reminder))
     }
 }

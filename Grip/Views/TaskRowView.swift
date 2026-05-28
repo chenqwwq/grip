@@ -2,33 +2,35 @@ import SwiftUI
 
 struct TaskRowView: View {
     let task: GripTask
+    let theme: GripTheme
     let onToggleCompletion: () -> Void
     let onSelect: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 20) {
                 Button {
                     onToggleCompletion()
                 } label: {
                     Image(systemName: task.status == .completed ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(task.status == .completed ? .blue : .gray)
-                        .font(.title3)
-                        .frame(width: 24, height: 24)
+                        .foregroundStyle(task.status == .completed ? theme.selectedControlBackground : theme.secondaryText)
+                        .font(.system(size: 23, weight: .medium))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
 
                 Button {
                     onSelect()
                 } label: {
-                    HStack(alignment: .center, spacing: 14) {
+                    HStack(alignment: .center, spacing: 22) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(task.title)
+                                .font(.system(size: 18, weight: .semibold))
                                 .strikethrough(task.status == .completed)
-                                .foregroundStyle(task.status == .completed ? .secondary : .primary)
+                                .foregroundStyle(task.status == .completed ? theme.secondaryText : theme.primaryText)
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            HStack(spacing: 6) {
+                            HStack(spacing: 7) {
                                 if let category = task.category {
                                     categoryTag(category)
                                 }
@@ -40,23 +42,25 @@ struct TaskRowView: View {
                                 }
                             }
                         }
-                        .frame(minWidth: 190, maxWidth: 320, alignment: .leading)
+                        .frame(minWidth: 220, maxWidth: 360, alignment: .leading)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(summaryText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(theme.secondaryText)
                                 .lineLimit(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             HStack(spacing: 8) {
                                 sourceBadge
                                 if task.isSynced {
-                                    metaBadge("已同步", systemImage: "arrow.triangle.2.circlepath")
+                                    metaBadge("已同步", systemImage: "arrow.triangle.2.circlepath", color: theme.secondaryText)
+                                } else {
+                                    metaBadge("未同步", systemImage: "icloud.slash", color: theme.tertiaryText)
                                 }
                                 Text(formatCreatedAt(task.createdAt))
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(theme.tertiaryText)
                                     .lineLimit(1)
                             }
                         }
@@ -70,13 +74,13 @@ struct TaskRowView: View {
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 22)
 
             HStack(spacing: 10) {
                 Color.clear
-                    .frame(width: 24)
+                    .frame(width: 28)
                 Rectangle()
-                    .fill(Color.secondary.opacity(0.18))
+                    .fill(theme.separator)
                     .frame(height: 1)
             }
         }
@@ -110,9 +114,11 @@ struct TaskRowView: View {
     private func categoryTag(_ category: String) -> some View {
         Text(category)
             .font(.caption2)
+            .fontWeight(.semibold)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.blue.opacity(0.1))
+            .background(theme.categoryBackground)
+            .foregroundStyle(theme.categoryForeground)
             .clipShape(Capsule())
     }
 
@@ -149,8 +155,8 @@ struct TaskRowView: View {
                 Image(systemName: "pencil")
             }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(.system(size: 15, weight: .medium))
+        .foregroundStyle(theme.secondaryText)
     }
 
     private var summaryText: String {
@@ -178,7 +184,7 @@ struct TaskRowView: View {
     }
 
     private var sourceBadge: some View {
-        metaBadge(sourceLabel, systemImage: sourceSystemImage)
+        metaBadge(sourceLabel, systemImage: sourceSystemImage, color: theme.secondaryText)
     }
 
     private var sourceLabel: String {
@@ -203,10 +209,11 @@ struct TaskRowView: View {
         }
     }
 
-    private func metaBadge(_ text: String, systemImage: String) -> some View {
+    private func metaBadge(_ text: String, systemImage: String, color: Color) -> some View {
         Label(text, systemImage: systemImage)
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .fontWeight(.semibold)
+            .foregroundStyle(color)
             .labelStyle(.titleAndIcon)
     }
 }

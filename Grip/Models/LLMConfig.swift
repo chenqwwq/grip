@@ -5,6 +5,19 @@ enum SyncMode: String, Codable, CaseIterable {
     case automatic, manual, off
 }
 
+enum AppAppearanceMode: String, Codable, CaseIterable {
+    case system, blueWhite, dark
+
+    var displayName: String {
+        switch self {
+        case .system: "跟随系统"
+        case .blueWhite: "蓝白"
+        case .dark: "深色"
+        }
+    }
+
+}
+
 struct LLMAdapterConfig: Codable, Identifiable {
     var id: UUID
     var name: String
@@ -23,14 +36,27 @@ struct LLMAdapterConfig: Codable, Identifiable {
 
 @Observable
 final class LLMConfig {
+    enum Keys {
+        static let textAdapter = "com.grip.text-adapter"
+        static let imageAdapter = "com.grip.image-adapter"
+        static let syncMode = "com.grip.sync-mode"
+        static let bidirectionalCompletionSyncEnabled = "com.grip.bidirectional-completion-sync-enabled"
+        static let logEnabled = "com.grip.log-enabled"
+        static let logPath = "com.grip.log-path"
+        static let appearanceMode = "com.grip.appearance-mode"
+    }
+
     var textAdapter: LLMAdapterConfig
     var imageAdapter: LLMAdapterConfig
     var syncMode: SyncMode
     var bidirectionalCompletionSyncEnabled: Bool
     var logEnabled: Bool
     var logPath: String
+    var appearanceModeRawValue: String
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         self.textAdapter = LLMAdapterConfig(
             name: "文本模型",
             apiURL: "https://api.openai.com/v1/chat/completions",
@@ -47,39 +73,43 @@ final class LLMConfig {
         self.bidirectionalCompletionSyncEnabled = false
         self.logEnabled = true
         self.logPath = ""
+        self.appearanceModeRawValue = AppAppearanceMode.system.rawValue
     }
 
     func save() {
-        let defaults = UserDefaults.standard
         let encoder = JSONEncoder()
         if let textData = try? encoder.encode(textAdapter),
            let imageData = try? encoder.encode(imageAdapter) {
-            defaults.set(textData, forKey: "com.grip.text-adapter")
-            defaults.set(imageData, forKey: "com.grip.image-adapter")
+            defaults.set(textData, forKey: Keys.textAdapter)
+            defaults.set(imageData, forKey: Keys.imageAdapter)
         }
-        defaults.set(syncMode.rawValue, forKey: "com.grip.sync-mode")
-        defaults.set(bidirectionalCompletionSyncEnabled, forKey: "com.grip.bidirectional-completion-sync-enabled")
-        defaults.set(logEnabled, forKey: "com.grip.log-enabled")
-        defaults.set(logPath, forKey: "com.grip.log-path")
+        defaults.set(syncMode.rawValue, forKey: Keys.syncMode)
+        defaults.set(bidirectionalCompletionSyncEnabled, forKey: Keys.bidirectionalCompletionSyncEnabled)
+        defaults.set(logEnabled, forKey: Keys.logEnabled)
+        defaults.set(logPath, forKey: Keys.logPath)
+        defaults.set(appearanceModeRawValue, forKey: Keys.appearanceMode)
     }
 
     func load() {
-        let defaults = UserDefaults.standard
         let decoder = JSONDecoder()
-        if let textData = defaults.data(forKey: "com.grip.text-adapter"),
+        if let textData = defaults.data(forKey: Keys.textAdapter),
            let config = try? decoder.decode(LLMAdapterConfig.self, from: textData) {
             textAdapter = config
         }
-        if let imageData = defaults.data(forKey: "com.grip.image-adapter"),
+        if let imageData = defaults.data(forKey: Keys.imageAdapter),
            let config = try? decoder.decode(LLMAdapterConfig.self, from: imageData) {
             imageAdapter = config
         }
-        if let raw = defaults.string(forKey: "com.grip.sync-mode"),
+        if let raw = defaults.string(forKey: Keys.syncMode),
            let mode = SyncMode(rawValue: raw) {
             syncMode = mode
         }
-        bidirectionalCompletionSyncEnabled = defaults.bool(forKey: "com.grip.bidirectional-completion-sync-enabled")
-        logEnabled = defaults.bool(forKey: "com.grip.log-enabled")
-        logPath = defaults.string(forKey: "com.grip.log-path") ?? ""
+        if let raw = defaults.string(forKey: Keys.appearanceMode),
+           let mode = AppAppearanceMode(rawValue: raw) {
+            appearanceModeRawValue = mode.rawValue
+        }
+        bidirectionalCompletionSyncEnabled = defaults.bool(forKey: Keys.bidirectionalCompletionSyncEnabled)
+        logEnabled = defaults.bool(forKey: Keys.logEnabled)
+        logPath = defaults.string(forKey: Keys.logPath) ?? ""
     }
 }

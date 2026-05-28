@@ -19,6 +19,11 @@ final class GripLogger {
             if enabled { prepareLogFile() }
         }
     }
+    var customPathIsDirectory: Bool = false {
+        didSet {
+            if enabled { prepareLogFile() }
+        }
+    }
 
     var currentLogPath: String {
         logFileURL?.path ?? ""
@@ -56,7 +61,11 @@ final class GripLogger {
 
         if !customPath.isEmpty {
             // 用户指定路径：通过 bookmark 获取沙盒外访问权限
-            let url = URL(fileURLWithPath: customPath)
+            let url = Self.logFileURL(
+                forCustomPath: customPath,
+                selectedPathIsDirectory: customPathIsDirectory,
+                date: Date()
+            )
             let dir = url.deletingLastPathComponent().path
 
             if let bookmarkURL = restoreBookmark() {
@@ -170,5 +179,27 @@ final class GripLogger {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return f.string(from: Date())
+    }
+
+    static func logFileURL(forCustomPath path: String, selectedPathIsDirectory: Bool, date: Date) -> URL {
+        let url = URL(fileURLWithPath: path, isDirectory: selectedPathIsDirectory)
+        if selectedPathIsDirectory || url.hasDirectoryPath || existingPathIsDirectory(url.path) {
+            return url.appendingPathComponent(logFileName(for: date), isDirectory: false)
+        }
+        return url
+    }
+
+    private static func existingPathIsDirectory(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return false
+        }
+        return isDirectory.boolValue
+    }
+
+    private static func logFileName(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "grip-\(formatter.string(from: date)).log"
     }
 }

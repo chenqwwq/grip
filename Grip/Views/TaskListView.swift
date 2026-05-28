@@ -5,20 +5,28 @@ struct TaskListView: View {
     let filter: TaskFilter
     let date: Date
     let coordinator: AppCoordinator?
+    let theme: GripTheme
     @State private var tasks: [GripTask] = []
 
     var body: some View {
-        List {
-            ForEach(tasks) { task in
-                TaskRowView(task: task, onToggleCompletion: {
-                    coordinator?.toggleCompletion(task)
-                }) {
-                    coordinator?.presentTask(task)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(tasks) { task in
+                    TaskRowView(task: task, theme: theme, onToggleCompletion: {
+                        coordinator?.toggleCompletion(task)
+                    }) {
+                        coordinator?.presentTask(task)
+                    }
                 }
-                .listRowSeparator(.hidden)
+
+                if tasks.isEmpty {
+                    emptyState
+                }
             }
+            .padding(.horizontal, 28)
+            .padding(.top, 10)
         }
-        .listStyle(.plain)
+        .background(theme.windowBackground)
         .id(filter)
         .onAppear {
             loadTasks()
@@ -49,5 +57,18 @@ struct TaskListView: View {
             GripLogger.shared.error("加载任务列表失败: \(error.localizedDescription)")
             tasks = []
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "checklist.unchecked")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(theme.tertiaryText)
+            Text("这一天还没有待办")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(theme.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 96)
     }
 }

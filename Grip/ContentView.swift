@@ -14,11 +14,27 @@ struct ContentView: View {
 
     var body: some View {
         rootContent
+            .preferredColorScheme(currentAppearanceMode.preferredColorScheme)
             .sheet(item: activeSheetBinding) { sheet in
                 if let coordinator {
                     switch sheet {
                     case .detail(let task):
-                        TaskDetailView(task: task)
+                        TaskDetailView(
+                            task: task,
+                            onSave: { task, title, detail, category, priority, dueDate in
+                                try coordinator.saveTask(
+                                    task,
+                                    title: title,
+                                    detail: detail,
+                                    category: category,
+                                    priority: priority,
+                                    dueDate: dueDate
+                                )
+                            },
+                            onDelete: { task in
+                                try coordinator.deleteTask(task)
+                            }
+                        )
                             .environment(taskManager)
                     case .draft(let draft):
                         TaskDraftView(draft: draft) { updatedDraft in
@@ -41,7 +57,8 @@ struct ContentView: View {
                         llmService: llmService,
                         inputCapture: inputCapture,
                         remindersSync: remindersSync,
-                        llmConfig: llmConfig
+                        llmConfig: llmConfig,
+                        permissionManager: permissionManager
                     )
                     self.coordinator = c
 
@@ -74,6 +91,7 @@ struct ContentView: View {
                 }
             }
             .task {
+                guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
                 guard !didPreparePermissions else { return }
                 didPreparePermissions = true
                 await permissionManager.prepareOnLaunch()
@@ -97,6 +115,10 @@ struct ContentView: View {
         }
     }
 
+    private var currentAppearanceMode: AppAppearanceMode {
+        AppAppearanceMode(rawValue: llmConfig.appearanceModeRawValue) ?? .system
+    }
+
     private var requiredPermissionView: some View {
         ZStack {
             Color.black.opacity(0.28)
@@ -107,18 +129,30 @@ struct ContentView: View {
                     Image(systemName: "record.circle")
                         .font(.title2)
                         .foregroundStyle(.red)
-                    Text("需要录屏权限")
+                    Text("录屏权限尚未生效")
                         .font(.headline)
                 }
 
-                Text("Grip 需要录屏权限来截取屏幕区域并识别任务。请在系统设置中允许 Grip 录制屏幕，然后回到应用重试。")
+                Text(permissionManager.screenCaptureGuidance)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                Text(permissionManager.currentAppPath)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+
                 HStack {
+                    Button("请求权限") {
+                        _ = permissionManager.requestScreenCaptureAccessFromUserAction()
+                    }
                     Button("打开系统设置") {
                         permissionManager.openScreenCaptureSettings()
+                    }
+                    Button("退出 Grip") {
+                        permissionManager.quitApp()
                     }
                     Button("重新检查") {
                         Task { await permissionManager.retryRequiredPermissions() }

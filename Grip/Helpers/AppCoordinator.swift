@@ -15,24 +15,38 @@ final class AppCoordinator {
     private let taskManager: TaskManager
     private let llmService: LLMService
     private let inputCapture: InputCapture
-    private let remindersSync: RemindersSync
+    private let remindersSync: ReminderSyncing
     private let llmConfig: LLMConfig
+    private let permissionManager: PermissionManager?
 
     init(
         taskManager: TaskManager,
         llmService: LLMService,
         inputCapture: InputCapture,
-        remindersSync: RemindersSync,
-        llmConfig: LLMConfig
+        remindersSync: ReminderSyncing,
+        llmConfig: LLMConfig,
+        permissionManager: PermissionManager? = nil
     ) {
         self.taskManager = taskManager
         self.llmService = llmService
         self.inputCapture = inputCapture
         self.remindersSync = remindersSync
         self.llmConfig = llmConfig
+        self.permissionManager = permissionManager
+
+        remindersSync.observeExternalChanges { [weak self] in
+            self?.handleExternalRemindersChange()
+        }
     }
 
     func handleScreenshotCapture() async {
+        if let permissionManager,
+           !permissionManager.ensureScreenCaptureAccessForUserAction() {
+            GripLogger.shared.error("截图流程取消: 录屏权限未授权或尚未对当前进程生效")
+            showFailure("录屏权限未授权或尚未生效，请按提示处理后重试")
+            return
+        }
+
         let imageData: Data
         do {
             imageData = try await inputCapture.captureArea()
@@ -164,10 +178,38 @@ final class AppCoordinator {
         }
     }
 
+    func saveTask(
+        _ task: GripTask,
+        title: String,
+        detail: String?,
+        category: String?,
+        priority: TaskPriority,
+        dueDate: Date?
+    ) throws {
+        task.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        task.detail = detail?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        task.category = category?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        task.priority = priority
+        task.dueDate = dueDate
+        try taskManager.updateTask(task)
+
+        if shouldPushTaskEdit(task) {
+            try syncTaskAfterEnsuringAccess(task)
+        }
+    }
+
+    func deleteTask(_ task: GripTask) throws {
+        if task.remindersEventId != nil {
+            try removeReminderAfterEnsuringAccess(for: task)
+        }
+        try taskManager.deleteTask(task)
+        GripLogger.shared.info("任务已删除: \(task.title)")
+    }
+
     func syncTasks() async {
         guard !isSyncing else { return }
         guard llmConfig.syncMode != .off else {
-            syncMessage = "Reminders 同步已关闭"
+            showTransientMessage("Reminders 同步已关闭")
             return
         }
         isSyncing = true
@@ -178,7 +220,7 @@ final class AppCoordinator {
             if !remindersSync.isAuthorized {
                 let granted = await remindersSync.requestAccess()
                 guard granted else {
-                    syncMessage = "未获得 Reminders 权限"
+                    showTransientMessage("未获得 Reminders 权限")
                     return
                 }
             }
@@ -192,9 +234,9 @@ final class AppCoordinator {
                 try syncTask(task)
                 syncedCount += 1
             }
-            syncMessage = "已同步 \(syncedCount) 个任务"
+            showTransientMessage("已同步 \(syncedCount) 个任务")
         } catch {
-            syncMessage = "同步失败：\(error.localizedDescription)"
+            showTransientMessage("同步失败：\(error.localizedDescription)")
             GripLogger.shared.error("同步 Reminders 失败: \(error.localizedDescription)")
         }
     }
@@ -215,6 +257,24 @@ final class AppCoordinator {
         }
     }
 
+    func handleExternalRemindersChange() {
+        guard !isSyncing else { return }
+        guard llmConfig.syncMode != .off else { return }
+        guard llmConfig.bidirectionalCompletionSyncEnabled else { return }
+
+        remindersSync.refreshAuthorizationStatus()
+        guard remindersSync.isAuthorized else { return }
+
+        do {
+            let tasks = try taskManager.fetchTasks()
+            for task in tasks where task.status != .cancelled && task.remindersEventId != nil {
+                applyRemoteCompletionStateIfNeeded(to: task)
+            }
+        } catch {
+            GripLogger.shared.error("处理 Reminders 外部变更失败: \(error.localizedDescription)")
+        }
+    }
+
     private func syncTask(_ task: GripTask) throws {
         if let reminderID = try remindersSync.syncTask(task) {
             task.remindersEventId = reminderID
@@ -230,6 +290,20 @@ final class AppCoordinator {
         } catch {
             GripLogger.shared.error("同步任务完成状态到 Reminders 失败: \(error.localizedDescription)")
         }
+    }
+
+    private func syncTaskAfterEnsuringAccess(_ task: GripTask) throws {
+        guard remindersSync.isAuthorized else {
+            throw AppCoordinatorError.remindersAccessDenied
+        }
+        try syncTask(task)
+    }
+
+    private func removeReminderAfterEnsuringAccess(for task: GripTask) throws {
+        guard remindersSync.isAuthorized else {
+            throw AppCoordinatorError.remindersAccessDenied
+        }
+        try remindersSync.removeTask(task)
     }
 
     private func applyRemoteCompletionStateIfNeeded(to task: GripTask) {
@@ -266,6 +340,11 @@ final class AppCoordinator {
         return llmConfig.syncMode == .automatic || task.remindersEventId != nil
     }
 
+    private func shouldPushTaskEdit(_ task: GripTask) -> Bool {
+        guard llmConfig.syncMode != .off else { return false }
+        return llmConfig.syncMode == .automatic || task.remindersEventId != nil
+    }
+
     private func parsePriority(_ rawValue: String?) -> TaskPriority {
         guard let rawValue else { return .none }
         return TaskPriority(rawValue: rawValue) ?? .none
@@ -284,16 +363,37 @@ final class AppCoordinator {
         }
     }
 
-    private func parseDate(_ dateString: String?) -> Date? {
-        guard let dateString = dateString else { return nil }
-        let formats = ["yyyy-MM-dd HH:mm", "yyyy-MM-dd"]
-        for format in formats {
-            let formatter = DateFormatter()
-            formatter.dateFormat = format
-            if let date = formatter.date(from: dateString) {
-                return date
+    private func showTransientMessage(_ message: String) {
+        overlayIsProcessing = false
+        overlayMessage = message
+        showOverlay = true
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if overlayMessage == message {
+                showOverlay = false
             }
         }
-        return nil
+    }
+
+    private func parseDate(_ dateString: String?) -> Date? {
+        GripDateParser.parse(dateString)
+    }
+}
+
+enum AppCoordinatorError: LocalizedError {
+    case remindersAccessDenied
+
+    var errorDescription: String? {
+        switch self {
+        case .remindersAccessDenied:
+            "未获得 Reminders 权限"
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

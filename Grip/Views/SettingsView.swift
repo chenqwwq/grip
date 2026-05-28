@@ -29,8 +29,10 @@ struct SettingsView: View {
     @State private var imageAPIKey: String = ""
     @State private var syncMode: SyncMode = .manual
     @State private var bidirectionalCompletionSyncEnabled: Bool = false
+    @State private var appearanceMode: AppAppearanceMode = .system
     @State private var logEnabled: Bool = false
     @State private var logPath: String = ""
+    @State private var logPathIsDirectory: Bool = false
     @State private var saveSuccess: Bool = false
 
     var body: some View {
@@ -84,7 +86,13 @@ struct SettingsView: View {
                 saveSuccess: saveSuccess
             ) { saveConfig() }
         case .general:
-            GeneralSettingsPane(logEnabled: $logEnabled, logPath: $logPath, saveSuccess: saveSuccess) { saveConfig() }
+            GeneralSettingsPane(
+                appearanceMode: $appearanceMode,
+                logEnabled: $logEnabled,
+                logPath: $logPath,
+                logPathIsDirectory: $logPathIsDirectory,
+                saveSuccess: saveSuccess
+            ) { saveConfig() }
         case .shortcuts:
             ShortcutSettingsPane()
         }
@@ -100,8 +108,10 @@ struct SettingsView: View {
         imageAPIKey = KeychainHelper.loadString(key: config.imageAdapter.keychainKey) ?? ""
         syncMode = config.syncMode
         bidirectionalCompletionSyncEnabled = config.bidirectionalCompletionSyncEnabled
+        appearanceMode = AppAppearanceMode(rawValue: config.appearanceModeRawValue) ?? .system
         logEnabled = config.logEnabled
         logPath = config.logPath
+        logPathIsDirectory = false
     }
 
     private func saveConfig() {
@@ -111,6 +121,7 @@ struct SettingsView: View {
         config.imageAdapter.model = imageModel
         config.syncMode = syncMode
         config.bidirectionalCompletionSyncEnabled = bidirectionalCompletionSyncEnabled
+        config.appearanceModeRawValue = appearanceMode.rawValue
         config.logEnabled = logEnabled
         config.logPath = logPath
 
@@ -120,6 +131,7 @@ struct SettingsView: View {
         config.save()
 
         GripLogger.shared.customPath = logPath
+        GripLogger.shared.customPathIsDirectory = logPathIsDirectory
         GripLogger.shared.enabled = logEnabled
 
         saveSuccess = true
@@ -372,8 +384,10 @@ private struct SyncSettingsPane: View {
 }
 
 private struct GeneralSettingsPane: View {
+    @Binding var appearanceMode: AppAppearanceMode
     @Binding var logEnabled: Bool
     @Binding var logPath: String
+    @Binding var logPathIsDirectory: Bool
     let saveSuccess: Bool
     let onSave: () -> Void
 
@@ -382,6 +396,22 @@ private struct GeneralSettingsPane: View {
             Text("通用")
                 .font(.headline)
                 .padding(.top, 16)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("外观")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("选择 Grip 的主窗口色调，也可以跟随系统浅色或深色模式。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $appearanceMode) {
+                    ForEach(AppAppearanceMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -411,6 +441,7 @@ private struct GeneralSettingsPane: View {
                                 panel.canCreateDirectories = true
                                 if panel.runModal() == .OK, let url = panel.url {
                                     logPath = url.path
+                                    logPathIsDirectory = url.hasDirectoryPath
                                     GripLogger.shared.saveBookmark(for: url)
                                 }
                             }

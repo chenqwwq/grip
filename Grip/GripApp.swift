@@ -1,5 +1,15 @@
 import SwiftUI
 
+extension AppAppearanceMode {
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .blueWhite: .light
+        case .dark: .dark
+        }
+    }
+}
+
 @main
 struct GripApp: App {
     @State private var llmConfig: LLMConfig
@@ -11,17 +21,20 @@ struct GripApp: App {
     @State private var permissionManager: PermissionManager
 
     init() {
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let config = LLMConfig()
         let remindersSync = RemindersSync()
         config.load()
         _llmConfig = State(initialValue: config)
-        _taskManager = State(initialValue: TaskManager())
+        _taskManager = State(initialValue: TaskManager(inMemory: isRunningTests))
         _llmService = State(initialValue: LLMService(config: config))
         _remindersSync = State(initialValue: remindersSync)
         _permissionManager = State(initialValue: PermissionManager(remindersSync: remindersSync))
-        GripLogger.shared.customPath = config.logPath
-        GripLogger.shared.enabled = config.logEnabled
-        GripLogger.shared.info("Grip 启动")
+        if !isRunningTests {
+            GripLogger.shared.customPath = config.logPath
+            GripLogger.shared.enabled = config.logEnabled
+            GripLogger.shared.info("Grip 启动")
+        }
     }
 
     var body: some Scene {
@@ -52,6 +65,7 @@ struct GripApp: App {
         Settings {
             SettingsView()
                 .environment(llmConfig)
+                .preferredColorScheme((AppAppearanceMode(rawValue: llmConfig.appearanceModeRawValue) ?? .system).preferredColorScheme)
         }
     }
 }
