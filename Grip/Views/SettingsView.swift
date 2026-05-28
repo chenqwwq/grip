@@ -19,6 +19,7 @@ enum SettingsTab: String, CaseIterable {
 
 struct SettingsView: View {
     @Environment(LLMConfig.self) private var config
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: SettingsTab = .llm
 
     @State private var textAPIURL: String = ""
@@ -36,34 +37,86 @@ struct SettingsView: View {
     @State private var saveSuccess: Bool = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            Divider()
-            content
+        VStack(spacing: 0) {
+            topTabBar
+            settingsContainer
         }
-        .frame(width: 560, height: 420)
+        .background(settingsBackground)
+        .preferredColorScheme(currentAppearanceMode.preferredColorScheme)
+        .frame(width: 720, height: 520)
         .onAppear {
             loadConfig()
         }
+        .onChange(of: appearanceMode) { _, newMode in
+            config.applyAppearanceMode(newMode)
+        }
     }
 
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Grip")
-                .font(.headline)
-                .padding(.horizontal, 12)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+    private var topTabBar: some View {
+        VStack(spacing: 8) {
+            Text("Grip 首选项")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(theme.secondaryText)
+                .padding(.top, 12)
 
-            ForEach(SettingsTab.allCases, id: \.self) { tab in
-                SidebarButton(tab: tab, isSelected: selectedTab == tab) {
-                    selectedTab = tab
+            HStack(spacing: 0) {
+                ForEach(SettingsTab.allCases, id: \.self) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        Text(tab.rawValue)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(selectedTab == tab ? Color.white : theme.primaryText)
+                            .frame(width: 104, height: 28)
+                            .background(selectedTab == tab ? theme.selectedControlBackground : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            Spacer()
+            .padding(2)
+            .background(theme.controlBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(theme.separator, lineWidth: 1)
+            }
         }
-        .frame(width: 150)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .padding(.bottom, 10)
+    }
+
+    private var settingsContainer: some View {
+        content
+            .font(.system(size: 13))
+            .controlSize(.small)
+            .foregroundStyle(theme.primaryText)
+            .padding(.horizontal, 34)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(panelBackground)
+            .overlay {
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(theme.separator, lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .padding(.horizontal, 22)
+            .padding(.bottom, 22)
+    }
+
+    private var settingsBackground: Color {
+        theme.windowBackground
+    }
+
+    private var panelBackground: Color {
+        theme.panelBackground
+    }
+
+    private var currentAppearanceMode: AppAppearanceMode {
+        appearanceMode
+    }
+
+    private var theme: GripTheme {
+        GripTheme(mode: currentAppearanceMode, colorScheme: colorScheme)
     }
 
     @ViewBuilder
@@ -121,7 +174,7 @@ struct SettingsView: View {
         config.imageAdapter.model = imageModel
         config.syncMode = syncMode
         config.bidirectionalCompletionSyncEnabled = bidirectionalCompletionSyncEnabled
-        config.appearanceModeRawValue = appearanceMode.rawValue
+        config.applyAppearanceMode(appearanceMode, persist: false)
         config.logEnabled = logEnabled
         config.logPath = logPath
 
@@ -154,12 +207,11 @@ private struct LLMSettingsPane: View {
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("LLM 模型配置")
-                .font(.headline)
-                .padding(.top, 16)
+                .font(.system(size: 14, weight: .semibold))
 
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
                 AdapterCardView(
                     title: "文本模型",
                     icon: "doc.text",
@@ -194,9 +246,8 @@ private struct LLMSettingsPane: View {
                 .tint(saveSuccess ? .green : .blue)
                 .animation(.easeInOut(duration: 0.2), value: saveSuccess)
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 2)
         }
-        .padding(.horizontal, 20)
     }
 }
 
@@ -214,17 +265,16 @@ private struct AdapterCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Label(title, systemImage: icon)
-                .font(.subheadline)
-                .fontWeight(.medium)
+                .font(.system(size: 13, weight: .semibold))
 
             fieldGroup("API URL", placeholder: "https://...", text: $apiURL)
             fieldGroup("Model", placeholder: "model-name", text: $model)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("API Key")
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 SecureField("sk-...", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
@@ -246,12 +296,12 @@ private struct AdapterCardView: View {
                 .disabled(isTesting || apiURL.isEmpty || apiKey.isEmpty)
 
                 if case .success(let msg) = testState {
-                    Text(msg)
-                        .font(.caption)
+                        Text(msg)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.green)
                 } else if case .failure(let msg) = testState {
                     Text(msg)
-                        .font(.caption)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.red)
                         .lineLimit(2)
                 }
@@ -259,7 +309,11 @@ private struct AdapterCardView: View {
         }
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay {
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1)
+        }
     }
 
     private var isTesting: Bool {
@@ -314,7 +368,7 @@ private struct AdapterCardView: View {
     private func fieldGroup(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
             TextField(placeholder, text: text)
                 .textFieldStyle(.roundedBorder)
@@ -329,17 +383,15 @@ private struct SyncSettingsPane: View {
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("同步设置")
-                .font(.headline)
-                .padding(.top, 16)
+                .font(.system(size: 14, weight: .semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text("Reminders 同步模式")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.system(size: 13, weight: .semibold))
                 Text("控制 Grip 任务如何同步到系统提醒事项")
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 Picker("", selection: $syncMode) {
@@ -350,12 +402,12 @@ private struct SyncSettingsPane: View {
                 .pickerStyle(.segmented)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Toggle("Reminders 完成状态双向同步", isOn: $bidirectionalCompletionSyncEnabled)
                     .toggleStyle(.switch)
                     .disabled(syncMode == .off)
                 Text("开启后，同步时会从 Reminders 拉取完成/待处理状态；不会因为 Reminders 删除而删除 Grip 任务。")
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -377,9 +429,8 @@ private struct SyncSettingsPane: View {
                 .tint(saveSuccess ? .green : .blue)
                 .animation(.easeInOut(duration: 0.2), value: saveSuccess)
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 2)
         }
-        .padding(.horizontal, 20)
     }
 }
 
@@ -392,17 +443,15 @@ private struct GeneralSettingsPane: View {
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("通用")
-                .font(.headline)
-                .padding(.top, 16)
+                .font(.system(size: 14, weight: .semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text("外观")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.system(size: 13, weight: .semibold))
                 Text("选择 Grip 的主窗口色调，也可以跟随系统浅色或深色模式。")
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 Picker("", selection: $appearanceMode) {
@@ -413,11 +462,10 @@ private struct GeneralSettingsPane: View {
                 .pickerStyle(.segmented)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     Text("启用文件日志")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                        .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Toggle("", isOn: $logEnabled)
                         .toggleStyle(.switch)
@@ -426,7 +474,7 @@ private struct GeneralSettingsPane: View {
                 if logEnabled {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("日志文件路径")
-                            .font(.caption)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
 
                         HStack(spacing: 8) {
@@ -452,7 +500,7 @@ private struct GeneralSettingsPane: View {
                         Text(logPath.isEmpty
                             ? "默认写入 ~/Library/Logs/Grip/ 按日期分文件"
                             : logPath)
-                            .font(.caption2)
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -493,18 +541,16 @@ private struct GeneralSettingsPane: View {
                 .tint(saveSuccess ? .green : .blue)
                 .animation(.easeInOut(duration: 0.2), value: saveSuccess)
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 2)
         }
-        .padding(.horizontal, 20)
     }
 }
 
 private struct ShortcutSettingsPane: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("快捷键")
-                .font(.headline)
-                .padding(.top, 16)
+                .font(.system(size: 14, weight: .semibold))
 
             shortcutRow(icon: "photo", title: "区域截图创建", shortcut: "⌘⇧T")
             shortcutRow(icon: "doc.on.clipboard", title: "从剪贴板创建", shortcut: "⌘⇧V")
@@ -513,26 +559,25 @@ private struct ShortcutSettingsPane: View {
             Spacer()
 
             Text("快捷键可在系统设置 → 键盘 → 键盘快捷键中修改")
-                .font(.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
-                .padding(.bottom, 16)
+                .padding(.bottom, 2)
         }
-        .padding(.horizontal, 20)
     }
 
     private func shortcutRow(icon: String, title: String, shortcut: String) -> some View {
         HStack {
             Label(title, systemImage: icon)
-                .font(.subheadline)
+                .font(.system(size: 13, weight: .medium))
             Spacer()
             Text(shortcut)
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
     }
 }
 

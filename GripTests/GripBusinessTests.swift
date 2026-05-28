@@ -154,6 +154,15 @@ final class GripBusinessTests: XCTestCase {
         XCTAssertEqual(AppAppearanceMode.dark.displayName, "深色")
     }
 
+    func testApplyingAppearanceModeUpdatesConfigImmediately() {
+        let config = LLMConfig()
+        Self.retainedObjects.append(config)
+
+        config.applyAppearanceMode(.dark, persist: false)
+
+        XCTAssertEqual(config.appearanceModeRawValue, AppAppearanceMode.dark.rawValue)
+    }
+
     private func makeCoordinator(
         taskManager: TaskManager,
         remindersSync: FakeRemindersSync,

@@ -15,23 +15,23 @@ struct GripTheme {
     }
 
     var windowBackground: Color {
-        usesDarkPalette ? Color(red: 0.11, green: 0.12, blue: 0.14) : Color(red: 0.95, green: 0.97, blue: 1.00)
+        usesDarkPalette ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.93, green: 0.96, blue: 1.00)
     }
 
     var panelBackground: Color {
-        usesDarkPalette ? Color(red: 0.13, green: 0.14, blue: 0.16) : .white
+        usesDarkPalette ? Color(red: 0.24, green: 0.24, blue: 0.24) : Color(red: 0.98, green: 0.99, blue: 1.00)
     }
 
     var controlBackground: Color {
-        usesDarkPalette ? Color.white.opacity(0.08) : Color(red: 0.90, green: 0.94, blue: 1.00)
+        usesDarkPalette ? Color.white.opacity(0.15) : Color(red: 0.86, green: 0.91, blue: 0.98)
     }
 
     var selectedControlBackground: Color {
-        usesDarkPalette ? Color(red: 0.04, green: 0.45, blue: 0.95) : Color(red: 0.08, green: 0.47, blue: 1.00)
+        usesDarkPalette ? Color(red: 0.43, green: 0.43, blue: 0.43) : Color(red: 0.12, green: 0.47, blue: 0.92)
     }
 
     var separator: Color {
-        usesDarkPalette ? Color.white.opacity(0.10) : Color(red: 0.79, green: 0.86, blue: 0.96)
+        usesDarkPalette ? Color.white.opacity(0.13) : Color(red: 0.74, green: 0.82, blue: 0.93)
     }
 
     var primaryText: Color {
@@ -79,7 +79,7 @@ struct MainWindow: View {
             bottomBar
         }
         .background(theme.windowBackground)
-        .frame(minWidth: 720, minHeight: 520)
+        .frame(minWidth: 620, minHeight: 430)
     }
 
     private var theme: GripTheme {
@@ -87,16 +87,16 @@ struct MainWindow: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             Text(toolbarTitle)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(theme.primaryText)
             dateSelector
             Spacer()
             filterControl
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     private var filterControl: some View {
@@ -106,18 +106,22 @@ struct MainWindow: View {
                     selectedFilter = filter
                 } label: {
                     Text(filter.rawValue)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(selectedFilter == filter ? Color.white : theme.primaryText)
-                        .frame(width: 82, height: 34)
+                        .frame(width: 66, height: 26)
                         .background(selectedFilter == filter ? theme.selectedControlBackground : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(4)
+        .padding(3)
         .background(theme.controlBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(theme.separator.opacity(0.9), lineWidth: 1)
+        }
     }
 
     private var dateSelector: some View {
@@ -128,20 +132,20 @@ struct MainWindow: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(dateButtonTitle)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                     Image(systemName: showDatePicker ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(showDatePicker ? theme.selectedControlBackground : theme.secondaryText)
                 }
-                .padding(.horizontal, 14)
-                .frame(height: 42)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
                 .background(dateButtonBackground)
                 .foregroundStyle(showDatePicker ? theme.selectedControlBackground : theme.primaryText)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 13)
+                    RoundedRectangle(cornerRadius: 6)
                         .stroke(dateButtonBorderColor, lineWidth: 1)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 13))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
             .onHover { isDateButtonHovered = $0 }
@@ -167,8 +171,8 @@ struct MainWindow: View {
                     }
                     .padding(.horizontal, 2)
                 }
-                .padding(18)
-                .frame(width: 360)
+                .padding(14)
+                .frame(width: 320)
             }
         }
     }
@@ -215,18 +219,18 @@ struct MainWindow: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Text("⌘⇧T 截图创建 · ⌘⇧V 剪贴板创建")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(theme.secondaryText)
             Spacer()
             if let message = coordinator?.syncMessage {
                 Text(message)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.secondaryText)
             } else {
                 Text("已同步本日任务")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.secondaryText)
             }
             Button("同步到 Reminders") {
@@ -234,26 +238,26 @@ struct MainWindow: View {
                 Task { await coordinator.syncTasks() }
             }
             .buttonStyle(.plain)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .frame(height: 34)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
             .background(theme.selectedControlBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .disabled(coordinator?.isSyncing ?? true)
             SettingsLink {
                 Text("设置")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(theme.primaryText)
-                    .padding(.horizontal, 16)
-                    .frame(height: 34)
+                    .padding(.horizontal, 12)
+                    .frame(height: 28)
                     .background(theme.controlBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 9)
     }
 }
 
@@ -267,14 +271,14 @@ private struct CalendarMonthPicker: View {
     private let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack {
                 Button {
                     shiftMonth(by: -1)
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 30, height: 30)
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .contentShape(RoundedRectangle(cornerRadius: 8))
@@ -282,7 +286,7 @@ private struct CalendarMonthPicker: View {
                 Spacer()
 
                 Text(monthTitle)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
 
                 Spacer()
@@ -291,19 +295,19 @@ private struct CalendarMonthPicker: View {
                     shiftMonth(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 30, height: 30)
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .contentShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            LazyVGrid(columns: columns, spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(weekdays, id: \.self) { weekday in
                     Text(weekday)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .frame(height: 24)
+                        .frame(height: 20)
                 }
 
                 ForEach(monthDays) { day in
@@ -313,12 +317,12 @@ private struct CalendarMonthPicker: View {
                         onSelect()
                     } label: {
                         Text("\(calendar.component(.day, from: day.date))")
-                            .font(.system(size: 14, weight: day.isSelected ? .semibold : .medium))
+                            .font(.system(size: 12, weight: day.isSelected ? .semibold : .medium))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 36)
+                            .frame(height: 30)
                             .foregroundStyle(dayForeground(day))
                             .background(dayBackground(day))
-                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                     .disabled(!day.isInDisplayedMonth)

@@ -90,6 +90,13 @@ final class LLMConfig {
         defaults.set(appearanceModeRawValue, forKey: Keys.appearanceMode)
     }
 
+    func applyAppearanceMode(_ mode: AppAppearanceMode, persist: Bool = true) {
+        appearanceModeRawValue = mode.rawValue
+        if persist {
+            save()
+        }
+    }
+
     func load() {
         let decoder = JSONDecoder()
         if let textData = defaults.data(forKey: Keys.textAdapter),

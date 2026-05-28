@@ -23,8 +23,8 @@ struct TaskListView: View {
                     emptyState
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 10)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
         }
         .background(theme.windowBackground)
         .id(filter)
@@ -60,15 +60,15 @@ struct TaskListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             Image(systemName: "checklist.unchecked")
-                .font(.system(size: 28, weight: .medium))
+                .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(theme.tertiaryText)
             Text("这一天还没有待办")
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.secondaryText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 96)
+        .padding(.top, 72)
     }
 }
