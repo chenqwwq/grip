@@ -60,10 +60,7 @@ struct TaskListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checklist.unchecked")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(theme.tertiaryText)
+        VStack(spacing: 0) {
             Text("这一天还没有待办")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.secondaryText)

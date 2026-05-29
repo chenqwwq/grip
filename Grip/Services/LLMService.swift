@@ -45,7 +45,7 @@ final class LLMService {
             ],
             [
                 "type": "text",
-                "text": systemPrompt()
+                "text": "请从这张截图中提取待办任务"
             ]
         ]
         return try await callLLM(requestKind: "image", adapter: adapter, apiKey: apiKey, messages: [

@@ -40,14 +40,44 @@ final class InputCapture {
     /// 读取剪贴板图片
     func readClipboardImage() -> Data? {
         let pasteboard = NSPasteboard.general
-        let rawImage = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
-        guard let rawImage else {
-            GripLogger.shared.debug("剪贴板无图片内容")
+
+        // 1. 尝试直接读取图片数据（截图工具、浏览器复制等）
+        if let rawImage = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
+            let image = pngData(from: rawImage) ?? rawImage
+            GripLogger.shared.info("读取剪贴板图片（原始数据），大小: \(image.count) bytes")
+            return image
+        }
+
+        // 2. 尝试从文件 URL 读取（Finder 复制图片文件等）
+        if let urlData = pasteboard.data(forType: .fileURL),
+           let url = URL(dataRepresentation: urlData, relativeTo: nil),
+           let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) {
+            let bitmap = NSBitmapImageRep(cgImage: cgImage)
+            if let png = bitmap.representation(using: .png, properties: [:]) {
+                GripLogger.shared.info("读取剪贴板图片（文件 URL），大小: \(png.count) bytes")
+                return png
+            }
+        }
+
+        // 3. 通过 NSImage 通用读取（兜底，覆盖更多粘贴场景）
+        if let nsImage = NSImage(pasteboard: pasteboard) {
+            if let png = pngDataFromNSImage(nsImage) {
+                GripLogger.shared.info("读取剪贴板图片（NSImage 兜底），大小: \(png.count) bytes")
+                return png
+            }
+        }
+
+        GripLogger.shared.debug("剪贴板无图片内容")
+        return nil
+    }
+
+    private func pngDataFromNSImage(_ nsImage: NSImage) -> Data? {
+        guard let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else {
             return nil
         }
-        let image = pngData(from: rawImage) ?? rawImage
-        GripLogger.shared.info("读取剪贴板图片，大小: \(image.count) bytes")
-        return image
+        return bitmap.representation(using: .png, properties: [:])
     }
 
     /// 区域截图：调用系统截图工具并获取结果

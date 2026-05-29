@@ -22,7 +22,9 @@ final class StatusItemController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "Grip")
+            button.image = Self.gripMenuBarImage()
+            button.imagePosition = .imageOnly
+            button.toolTip = "Grip"
         }
 
         menu = NSMenu()
@@ -37,6 +39,7 @@ final class StatusItemController: NSObject {
         cachedTasks = taskProvider?() ?? []
 
         let titleItem = NSMenuItem(title: "今日任务", action: nil, keyEquivalent: "")
+        titleItem.image = Self.gripMenuBarImage(size: NSSize(width: 14, height: 14))
         titleItem.isEnabled = false
         menu.addItem(titleItem)
 
@@ -166,6 +169,14 @@ final class StatusItemController: NSObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         return formatter.string(from: date)
+    }
+
+    private static func gripMenuBarImage(size: NSSize = NSSize(width: 18, height: 18)) -> NSImage? {
+        let image = NSImage(named: NSImage.Name("MenuBarIcon"))?.copy() as? NSImage
+            ?? NSImage(systemSymbolName: "app", accessibilityDescription: "Grip")
+        image?.isTemplate = true
+        image?.size = size
+        return image
     }
 }
 
